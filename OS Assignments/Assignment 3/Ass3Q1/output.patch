@@ -1,0 +1,88 @@
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index 463ad60fe..041c19107 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -370,6 +370,7 @@
+ 446	common	landlock_restrict_self	sys_landlock_restrict_self
+ 447	common	memfd_secret		sys_memfd_secret
+ 448	common	kernel_2d_memcpy	sys_kernel_2d_memcpy
++449 common  delayAdder          sys_delayAdder
+ #
+ # Due to a historical design error, certain syscalls are numbered differently
+ # in x32 as compared to native x86_64.  These syscalls have numbers 512-547.
+diff --git a/include/linux/sched.h b/include/linux/sched.h
+index f6935787e..86bff1b71 100644
+--- a/include/linux/sched.h
++++ b/include/linux/sched.h
+@@ -475,6 +475,7 @@ struct sched_entity {
+ 	u64				prev_sum_exec_runtime;
+ 
+ 	u64				nr_migrations;
++	u64				delayTime;
+ 
+ 	struct sched_statistics		statistics;
+ 
+diff --git a/kernel/sched/core.c b/kernel/sched/core.c
+index 399c37c95..10cd48768 100644
+--- a/kernel/sched/core.c
++++ b/kernel/sched/core.c
+@@ -3956,6 +3956,7 @@ static void __sched_fork(unsigned long clone_flags, struct task_struct *p)
+ 	p->se.prev_sum_exec_runtime	= 0;
+ 	p->se.nr_migrations		= 0;
+ 	p->se.vruntime			= 0;
++	p->se.delayTime			= 0;
+ 	INIT_LIST_HEAD(&p->se.group_node);
+ 
+ #ifdef CONFIG_FAIR_GROUP_SCHED
+diff --git a/kernel/sched/fair.c b/kernel/sched/fair.c
+index 30a6984a5..f4667644d 100644
+--- a/kernel/sched/fair.c
++++ b/kernel/sched/fair.c
+@@ -811,7 +811,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
+ 	curr->sum_exec_runtime += delta_exec;
+ 	schedstat_add(cfs_rq->exec_clock, delta_exec);
+ 
+-	curr->vruntime += calc_delta_fair(delta_exec, curr);
++	curr->vruntime += calc_delta_fair(delta_exec, curr) + curr->delayTime;
+ 	update_min_vruntime(cfs_rq);
+ 
+ 	if (entity_is_task(curr)) {
+diff --git a/kernel/sys.c b/kernel/sys.c
+index 6d375ac97..f46a7a8f2 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -2588,6 +2588,34 @@ SYSCALL_DEFINE4(kernel_2d_memcpy, float *, mat1, float *, mat2, int, row, int, c
+     return 0;
+ }
+ 
++SYSCALL_DEFINE2(delayAdder, long, delayTime, pid_t, pid){
++    struct pid *pid_struct = NULL;
++    struct task_struct *p;
++    
++
++    if(delayTime<0){
++        return -EINVAL;
++    }
++
++	if(pid < 0){
++		return -EINVAL;
++	}
++
++    long s_delay_value_actual = delayTime*1000000;
++    
++    pid_struct = find_get_pid(pid);
++    if(pid_struct==NULL){
++        return -ESRCH;
++    }
++    p = pid_task(pid_struct,PIDTYPE_PID);
++    p->se.delayTime = s_delay_value_actual;
++    
++    printk(KERN_ALERT "vruntime of PID: %d is now %lld \n",pid,p->se.vruntime);
++    printk(KERN_ALERT "PID Delay: %d -> %lld \n",pid,p->se.delayTime);
++
++    return 0;	
++}
++
+ 
+ SYSCALL_DEFINE3(getcpu, unsigned __user *, cpup, unsigned __user *, nodep,
+ 		struct getcpu_cache __user *, unused)

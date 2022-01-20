@@ -1,0 +1,39 @@
+diff --git a/arch/x86/entry/syscalls/syscall_64.tbl b/arch/x86/entry/syscalls/syscall_64.tbl
+index f6b57799c..463ad60fe 100644
+--- a/arch/x86/entry/syscalls/syscall_64.tbl
++++ b/arch/x86/entry/syscalls/syscall_64.tbl
+@@ -369,7 +369,7 @@
+ 445	common	landlock_add_rule	sys_landlock_add_rule
+ 446	common	landlock_restrict_self	sys_landlock_restrict_self
+ 447	common	memfd_secret		sys_memfd_secret
+-
++448	common	kernel_2d_memcpy	sys_kernel_2d_memcpy
+ #
+ # Due to a historical design error, certain syscalls are numbered differently
+ # in x32 as compared to native x86_64.  These syscalls have numbers 512-547.
+diff --git a/kernel/sys.c b/kernel/sys.c
+index ef1a78f5d..6d375ac97 100644
+--- a/kernel/sys.c
++++ b/kernel/sys.c
+@@ -2574,6 +2574,21 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
+ 	return error;
+ }
+ 
++SYSCALL_DEFINE4(kernel_2d_memcpy, float *, mat1, float *, mat2, int, row, int, col)
++{
++    float newMatrix[row][col];
++    if (copy_from_user(&newMatrix, mat2, sizeof(newMatrix)) != 0)
++    {
++        return -EFAULT;
++    }
++    if (copy_to_user(mat1, &newMatrix, sizeof(newMatrix)) != 0)
++    {
++        return -EFAULT;
++    }
++    return 0;
++}
++
++
+ SYSCALL_DEFINE3(getcpu, unsigned __user *, cpup, unsigned __user *, nodep,
+ 		struct getcpu_cache __user *, unused)
+ {
